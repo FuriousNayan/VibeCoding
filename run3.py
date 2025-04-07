@@ -18,8 +18,6 @@ DASH_COOLDOWN = 60
 COMBO_TIMER = 120  # 2 seconds at 60 FPS
 SCREEN_SHAKE_DURATION = 10
 SCREEN_SHAKE_INTENSITY = 5
-COMBO_DECAY = 1
-COMBO_MULTIPLIER = 0.2
 
 # Colors
 WHITE = (255, 255, 255)
@@ -190,41 +188,17 @@ class Player:
         self.dash_timer = 0
         self.dash_particles = []
         self.max_dash_particles = 20
-        self.in_spaceship = False
-        self.current_spaceship = None
-        self.powerup_timers = {'shield': 0}
-        self.shield_radius = 0
-        self.shield_direction = 1
 
     def update(self, platforms, spikes, monsters, powerups):
         if not self.is_alive:
             return
 
-        # If player is in a spaceship, update position with the spaceship
-        if self.in_spaceship and self.current_spaceship:
-            self.x = self.current_spaceship.x + self.current_spaceship.width // 2 - self.width // 2
-            self.y = self.current_spaceship.y + self.current_spaceship.height // 2 - self.height // 2
-            return
-
-        # Update combo
-        if self.combo > 0:
+        # Update combo timer
+        if self.combo_timer > 0:
             self.combo_timer -= 1
-            if self.combo_timer <= 0:
-                self.combo = max(0, self.combo - COMBO_DECAY)
-                self.score_multiplier = 1 + (self.combo * COMBO_MULTIPLIER)
-
-        # Update powerups
-        for powerup_type in self.powerup_timers:
-            if self.powerup_timers[powerup_type] > 0:
-                self.powerup_timers[powerup_type] -= 1
-                if self.powerup_timers[powerup_type] <= 0:
-                    self.powerups[powerup_type] = False
-
-        # Update shield effect
-        if self.powerups['shield']:
-            self.shield_radius += 0.2 * self.shield_direction
-            if self.shield_radius > 5 or self.shield_radius < 0:
-                self.shield_direction *= -1
+            if self.combo_timer == 0:
+                self.combo = 0
+                self.score_multiplier = 1
 
         # Update dash cooldown
         if self.dash_cooldown > 0:
@@ -332,6 +306,11 @@ class Player:
                 if self.check_projectile_collision(projectile):
                     self.is_alive = False
                     return
+
+        # Check if player is off screen
+        if self.y > HEIGHT or self.y < -self.height:
+            self.is_alive = False
+            return
 
         # Keep player in horizontal bounds
         if self.x < 0:
@@ -760,10 +739,6 @@ class Spaceship:
         self.glow_direction = 1
         self.pulse_size = 0
         self.pulse_direction = 1
-        self.player_aboard = False
-        self.boarding_timer = 0
-        self.max_boarding_time = 180  # 3 seconds at 60 FPS
-        self.boarding_particles = []
 
     def update(self):
         # Update glow effect
@@ -777,7 +752,7 @@ class Spaceship:
             self.pulse_direction *= -1
 
         # Update engine particles
-        if self.is_active or self.player_aboard:
+        if self.is_active:
             # Create new engine particles
             if random.random() < 0.3:
                 self.engine_particles.append((
@@ -789,19 +764,8 @@ class Spaceship:
             self.x += self.travel_speed
             self.travel_progress += self.travel_speed
 
-        # Update boarding particles
-        if self.player_aboard:
-            self.boarding_timer += 1
-            if random.random() < 0.2:
-                self.boarding_particles.append((
-                    self.x + random.randint(0, self.width),
-                    self.y + random.randint(0, self.height),
-                    random.randint(10, 20)
-                ))
-
         # Update existing particles
         self.engine_particles = [(x - 5, y, life - 1) for x, y, life in self.engine_particles if life > 0]
-        self.boarding_particles = [(x, y, life - 1) for x, y, life in self.boarding_particles if life > 0]
 
     def draw(self, surface):
         # Draw engine particles
@@ -810,14 +774,6 @@ class Spaceship:
             particle_color = (*self.engine_color[:3], alpha)
             particle_surface = pygame.Surface((8, 8), pygame.SRCALPHA)
             pygame.draw.circle(particle_surface, particle_color, (4, 4), 4)
-            surface.blit(particle_surface, (int(x), int(y)))
-
-        # Draw boarding particles
-        for x, y, life in self.boarding_particles:
-            alpha = int(255 * (life / 20))
-            particle_color = (255, 255, 255, alpha)
-            particle_surface = pygame.Surface((6, 6), pygame.SRCALPHA)
-            pygame.draw.circle(particle_surface, particle_color, (3, 3), 3)
             surface.blit(particle_surface, (int(x), int(y)))
 
         # Draw glow
@@ -847,26 +803,13 @@ class Spaceship:
         ])
 
         # Add pulse effect
-        if not self.is_active and not self.player_aboard:
+        if not self.is_active:
             pulse_surface = pygame.Surface((self.width + self.pulse_size*2, self.height + self.pulse_size*2), pygame.SRCALPHA)
             pygame.draw.rect(pulse_surface, (*self.color[:3], 50), 
                            (self.pulse_size, self.pulse_size, self.width, self.height), border_radius=5)
             surface.blit(pulse_surface, (self.x - self.pulse_size, self.y - self.pulse_size))
 
         surface.blit(ship_surface, (self.x, self.y))
-
-        # Draw boarding progress if player is aboard
-        if self.player_aboard:
-            progress = self.boarding_timer / self.max_boarding_time
-            bar_width = 40
-            bar_height = 5
-            bar_x = self.x + (self.width - bar_width) // 2
-            bar_y = self.y - 10
-            
-            # Draw background
-            pygame.draw.rect(surface, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
-            # Draw progress
-            pygame.draw.rect(surface, CYAN, (bar_x, bar_y, int(bar_width * progress), bar_height))
 
 class Game:
     def __init__(self):
