@@ -4,6 +4,7 @@ import math
 
 # Initialize Pygame
 pygame.init()
+pygame.mixer.init()  # Initialize the mixer module
 
 # Constants
 WIDTH, HEIGHT = 800, 600
@@ -18,6 +19,12 @@ DASH_COOLDOWN = 60
 COMBO_TIMER = 120  # 2 seconds at 60 FPS
 SCREEN_SHAKE_DURATION = 10
 SCREEN_SHAKE_INTENSITY = 5
+COMBO_MULTIPLIER = 0.2  # Score multiplier per combo
+MAX_COMBO = 10
+COMBO_DECAY = 1  # Points lost per frame
+POWERUP_DURATION = 300  # 5 seconds at 60 FPS
+SPACESHIP_SPEED = 15  # Increased from 10
+SPACESHIP_DISTANCE = 800  # Increased from 500
 
 # Colors
 WHITE = (255, 255, 255)
@@ -828,9 +835,9 @@ class Game:
         self.meteorites = []
         self.last_meteorite_time = 0
         self.meteorite_delay = 1000
-        self.shooting_stars = []  # Add shooting stars list
+        self.shooting_stars = []
         self.last_shooting_star_time = 0
-        self.shooting_star_delay = 2000  # Reduced from 3000 to 2000 (2 seconds between shooting stars)
+        self.shooting_star_delay = 2000
         self.screen_shake = 0
         self.high_score = 0
         self.is_paused = False
@@ -849,8 +856,27 @@ class Game:
         self.background_particles = []
         self.max_background_particles = 100
         self.spaceships = []
-        self.spaceship_delay = 10000  # 10 seconds between spaceships
+        self.spaceship_delay = 10000
         self.last_spaceship_time = 0
+        self.combo_font = pygame.font.Font(None, 48)
+        self.powerup_spawn_chance = 0.2
+
+        # Initialize music
+        self.music_playing = False
+        self.start_music()
+
+    def start_music(self):
+        if not self.music_playing:
+            # Generate a simple synth space music
+            pygame.mixer.music.load("space_synth.mp3")  # You'll need to create this file
+            pygame.mixer.music.set_volume(0.5)  # Set volume to 50%
+            pygame.mixer.music.play(-1)  # -1 means loop indefinitely
+            self.music_playing = True
+
+    def stop_music(self):
+        if self.music_playing:
+            pygame.mixer.music.stop()
+            self.music_playing = False
 
     def generate_background(self):
         # Create gradient background
@@ -1190,6 +1216,10 @@ class Game:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_p:
                 self.is_paused = not self.is_paused
+                if self.is_paused:
+                    pygame.mixer.music.pause()
+                else:
+                    pygame.mixer.music.unpause()
             elif event.key == pygame.K_LSHIFT and not self.is_paused:
                 self.player.dash()
                 # Add screen shake for dash
@@ -1213,18 +1243,20 @@ class Game:
                     self.player.jump()
             elif event.key == pygame.K_r and not self.player.is_alive:
                 self.restart()
+                self.start_music()  # Restart music when game restarts
 
     def restart(self):
         self.player = Player()
         self.platforms = []
         self.spikes = []
         self.monsters = []
-        self.powerups = []  # Reset powerups
+        self.powerups = []
         self.score = 0
         self.game_over = False
         self.generate_initial_platforms()
         self.spaceships = []
         self.last_spaceship_time = 0
+        self.start_music()  # Start music when game restarts
 
 def main():
     game = Game()
